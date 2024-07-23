@@ -32,5 +32,10 @@ router.route('/logout').post(
 
 router.route('/refreshToken').post(refreshAccessToken)
 
+router.route('./changePassword').post(
+    verifyJWT,
+    
+)
+
 
 export default router
