@@ -4,6 +4,7 @@ import { User } from '../models/user.model.js'
 import { deleteOnCloudinary, uploadOnCloudinary } from '../utils/cloudinary.js'
 import { ApiResponse } from '../utils/ApiResponse.js'
 import jwt from 'jsonwebtoken'
+import mongoose from "mongoose";
 
 const generateAccessAndRefereshToken = async (userId) => {
     try {
@@ -125,6 +126,7 @@ const loginUser = asyncHandler( async (req, res) => {
 
 
 const logoutUser = asyncHandler (async (req, res) => {
+    console.log(req.user);
     await User.findByIdAndUpdate(
         req.user._id , 
         {
@@ -253,11 +255,11 @@ const updateUserAvatar = asyncHandler (async (req, res) => {
                 avatar: avatar.url
             }
         },
-        {new: true}
+        {new: false}
     ).select("-password")
 
     // this was the task
-    await deleteOnCloudinary(avatarLocalPath)
+    await deleteOnCloudinary(user.avatar)
 
     return res.status(200)
     .json(new ApiResponse(200, user, "Avatar updated successgully"))
@@ -282,11 +284,11 @@ const updateCoverImage = asyncHandler (async (req, res) => {
                 coverImage: coverImage.url
             }
         },
-        {new: true}
+        {new: false}
     ).select("-password")
 
     // this was the task
-    await deleteOnCloudinary(coverImageLocalPath)
+    await deleteOnCloudinary(user.coverImage)
     
     return res.status(200)
     .json(new ApiResponse(200, user, "Cover image updated successgully"))
@@ -295,7 +297,7 @@ const updateCoverImage = asyncHandler (async (req, res) => {
 
 const getUserChannelProfile = asyncHandler( async (req, res) => {
     const { username } = req.params
-
+    console.log(req.params)
     if (!username?.trim()) {
         throw new ApiError(400, "Username is missing")
     }
@@ -364,6 +366,55 @@ const getUserChannelProfile = asyncHandler( async (req, res) => {
     .json(new ApiResponse(200, channel[0], "Channel data fetched successfully"))
 })
 
+const getUserWatchHistory = asyncHandler ( async (req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {
+            $lookup: {
+                from: 'Videos',
+                localField: 'watchHistory',
+                foreignField: '_id',
+                as: "watchHistory",
+
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: 'users',
+                            localField: '_owner',
+                            foreignField: '_id',
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        _id: 1,
+                                        fullname: 1,
+                                        username: 1,
+                                        avatar: 1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res.status(200)
+    .json(new ApiResponse(200, user[0].watchHistory, "Watch history fetched successfully"))
+})
+
 export { 
     registerUser,
     loginUser,
@@ -374,5 +425,6 @@ export {
     updateUserAvatar,
     updateCoverImage,
     getCurrentUser,
-    getUserChannelProfile
+    getUserChannelProfile,
+    getUserWatchHistory
  }
