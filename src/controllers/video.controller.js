@@ -5,14 +5,131 @@ import {ApiError} from "../utils/ApiErrors.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
 import {deleteOnCloudinary, uploadOnCloudinary} from "../utils/cloudinary.js"
+import mongooseAggregatePaginate from 'mongoose-aggregate-paginate-v2'
 
 
 const getAllVideos = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
     //TODO: get all videos based on query, sort, pagination
-
     
+    // Biggest challenge i faced was the facet error due to the aggregatePagination, i did not know about
+    // that this package internally uses $facet therefore i was getting an error
+    // I divided the code in searching and pagination two parts after this i was able to solve it.
+    const options = {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+    }
 
+    const pipeline = []
+
+    if(query){
+        pipeline.push({
+            $search: {
+                index: 'search-videos',
+                text: {
+                    query: query,
+                    path: 'title'
+                }
+            }
+        });
+    }
+
+    if(sortBy && sortType){
+        pipeline.push({
+            $sort: {
+                createdAt: sortType === "asc" ? 1 : -1
+            }
+        })
+    }else{
+        pipeline.push({
+            $sort: {
+                createdAt: -1
+            }
+        })
+    }
+
+    if(userId){
+        pipeline.push({
+            $match: {
+                owner: new mongoose.Types.ObjectId(userId)
+            },
+        })
+    }
+
+    pipeline.push({
+        $match: {
+            isPublished: true
+        }
+    })
+
+    const searchResults = await Video.aggregate(pipeline).exec()
+
+    const videoIds = searchResults.map(video => video._id)
+
+    if(!videoIds.length){
+        return res.status(200)
+        .json(new ApiResponse(200, {docs: [], totalDocs: 0, limit: options.limit, page: options.page, totalPages: 0 }, "No videos found"))
+    }
+
+    const paginatePipeline = [
+        {
+            $match: {
+                _id: { $in: videoIds }
+            }
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "user",
+                pipeline: [
+                    {
+                        $project: {
+                            fullname: 1,
+                            username: 1,
+                            avatar: 1,
+                            coverImage: 1,
+                            email: 1,                
+                        }
+                    },
+                ]
+            
+            },
+        
+        },
+        {
+            $addFields: {
+                owner: {
+                    $first: "$user"
+                }
+            }
+        },
+        {
+            $project: {
+                title: 1,
+                description: 1,
+                owner: 1,
+                videoFile: 1,
+                thumbnail: 1,
+                duration: 1,
+                views: 1
+            }
+        }
+    ]
+
+
+    const videoAggregate = Video.aggregate(paginatePipeline)
+
+    const videos = await Video.aggregatePaginate(videoAggregate, options)
+
+    console.log(videos);
+    if(!videos){
+        throw new ApiError(400, "Something went wrong while fetching videos")
+    }
+
+    return res.status(200)
+    .json(new ApiResponse(200, videos, "Videos fetched successfully"))
 })
 
 const publishAVideo = asyncHandler(async (req, res) => {
@@ -132,7 +249,8 @@ const getVideoById = asyncHandler(async (req, res) => {
     console.log(video)
 
     if(!video){
-        throw new ApiError(400, "Video not found")
+        return res.status(200)
+        .json(new ApiResponse(200, video[0], "Video not found"))
     }
 
     return res.status(200)

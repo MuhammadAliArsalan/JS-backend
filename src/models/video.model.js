@@ -8,7 +8,7 @@ const videoSchema = new Schema(
             type: String, // cloudinary url
             required: true
         },
-        thumbmail: {
+        thumbnail: {
             type: String, // cloudinary url
             required: true    
         },
@@ -43,4 +43,4 @@ const videoSchema = new Schema(
 
 videoSchema.plugin(mongooseAggregatePaginate)
 
-export const Video = mongoose.model('Video', videoSchema) 
+export const Video = mongoose.model('Video', videoSchema)
