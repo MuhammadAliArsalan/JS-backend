@@ -74,7 +74,6 @@ const getUserTweets = asyncHandler(async (req, res) => {
 
     console.log(tweets);
 
-    // Did not check for the null in tweets because some users may have not tweeted at all
     return res.status(200)
     .json(new ApiResponse(200, tweets, "Tweets fetched successfully"))
 
