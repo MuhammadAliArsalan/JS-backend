@@ -6,6 +6,7 @@ import { ApiResponse } from '../utils/ApiResponse.js'
 import jwt from 'jsonwebtoken'
 import mongoose from "mongoose";
 
+
 const generateAccessAndRefereshToken = async (userId) => {
     try {
         const user = await User.findById(userId)
@@ -123,7 +124,6 @@ const loginUser = asyncHandler( async (req, res) => {
         )
     )
 })
-
 
 const logoutUser = asyncHandler (async (req, res) => {
     console.log(req.user);
